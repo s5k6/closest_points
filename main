@@ -1,0 +1,97 @@
+#!/usr/bin/python
+
+import random
+import math
+
+
+class Point:
+    def __init__(self, *coords):
+        self.coords = coords
+
+    def dist(p1, p2):
+        return math.sqrt(sum(map(
+            lambda u, v: (u - v) ** 2,
+            p1.coords,
+            p2.coords
+        )))
+
+
+    
+def mkPoints():
+
+    points = list()
+    for i in range(100000):
+        x = random.randrange(1000000)
+        y = random.randrange(1000000)
+        points.append(Point(x, y))
+    print('Generated {} points.'.format(len(points)))
+
+    return points
+
+
+
+def bruteForce(points):
+    
+    dist = dict()
+    for p in points:
+        for q in points:
+            if p is q:
+                continue
+            d = Point.dist(p,q)
+            dist[p,q] = d
+            #print(p.coords, q.coords, d)
+
+    p, q = min(dist, key=(lambda k: dist[k]))
+    return dist[p,q], p, q
+
+
+
+def recurse(ps, depth=0):
+    l = len(ps)
+    if l > 3:
+        s = l // 2
+        left = ps[:s]
+        right = ps[s:]
+        d, p, q = min(
+            recurse(left, depth+1),
+            recurse(right, depth+1),
+            key = lambda a: a[0]
+        )
+
+        leftmost = right[0].coords[0] - d
+        for l in reversed(left):
+            if l.coords[0] < leftmost:
+                break
+            rightmost = left[0].coords[0] + d
+            for r in right:
+                if r.coords[0] > rightmost:
+                    break
+                d2 = Point.dist(l, r)
+                if d2 < d:
+                    d = d2
+                    p = l
+                    q = r
+        
+        return d, p, q
+    else:
+        return bruteForce(ps)
+    
+def closestPair(points):
+    "https://en.wikipedia.org/wiki/Closest_pair_of_points_problem"
+
+    return recurse(sorted(points, key = lambda p: p.coords[0]))
+    
+
+def main():
+
+    points = mkPoints()
+    #d, p, q = bruteForce(points)
+    #print('brute force: {} {} {}'.format(d, p.coords, q.coords))
+
+
+    d, p, q = closestPair(points)
+    print('closest pair: {} {} {}'.format(d, p.coords, q.coords))
+    
+    
+if __name__ == '__main__':
+    main()
