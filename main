@@ -16,15 +16,16 @@ class Point:
             p2.coords
         )))
 
+    def __str__(self):
+        return '[' + ','.join(map(str, self.coords)) + ']'
 
+def mkPoints(n, d=5):
     
-def mkPoints(n):
-
     points = list()
+    d = random.randrange(1, 10)
     for i in range(n):
-        x = random.randrange(10 * n)
-        y = random.randrange(10 * n)
-        points.append(Point(x, y))
+        cs = map(lambda _: random.randrange(math.floor(10*n/d)), range(d))
+        points.append(Point(*cs))
     print('Generated {} points.'.format(len(points)))
 
     return points
@@ -32,6 +33,7 @@ def mkPoints(n):
 
 
 def bruteForce(points):
+    '''Brute force implementation.  O(**2)'''
 
     p = points[0]
     q = points[1]
@@ -50,41 +52,124 @@ def bruteForce(points):
 
 
 
-def recurse(ps):
-    l = len(ps)
-
-    if l < 2:
-        return math.inf, None, None
-    
-    s = l // 2
-    left = ps[:s]
-    right = ps[s:]
-    d, p, q = min(
-        recurse(left),
-        recurse(right),
-        key = lambda a: a[0]
-    )
-
-    leftmost = right[0].coords[0] - d
-    for l in reversed(left):
-        if l.coords[0] < leftmost:
-            break
-        rightmost = left[-1].coords[0] + d
-        for r in right:
-            if r.coords[0] > rightmost:
-                break
-            d2 = Point.dist(l, r)
-            if d2 < d:
-                d = d2
-                p = l
-                q = r
-
-    return d, p, q
-    
 def closestPair(points):
-    "https://en.wikipedia.org/wiki/Closest_pair_of_points_problem"
+    '''https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
 
+    Version using lists'''
+
+    def recurse(ps):
+        l = len(ps)
+
+        if l < 2:
+            return math.inf, None, None
+
+        if l == 2:
+            p = ps[0]
+            q = ps[1]
+            return Point.dist(p, q), p, q
+
+        s = l // 2
+        left = ps[:s]
+        right = ps[s:]
+        d, p, q = min(
+            recurse(left),
+            recurse(right),
+            key = lambda a: a[0]
+        )
+
+        leftmost = right[0].coords[0] - d
+        for l in reversed(left):
+            if l.coords[0] < leftmost:
+                break
+            rightmost = left[-1].coords[0] + d
+            for r in right:
+                if r.coords[0] > rightmost:
+                    break
+                d2 = Point.dist(l, r)
+                if d2 < d:
+                    d = d2
+                    p = l
+                    q = r
+
+        return d, p, q
+    
     return recurse(sorted(points, key = lambda p: p.coords[0]))
+
+
+
+def closestPair2(unsortedPoints):
+    '''https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
+
+    Version using list indexing.  This would be more like a C
+    implementation.
+
+    '''
+
+    points = sorted(unsortedPoints, key = lambda p: p.coords[0])
+
+    def recurse(i, j): # first, last+1
+
+        if j - i < 2:
+            return math.inf, None, None
+
+        if j - i == 2:
+            p = points[i]
+            q = points[i+1]
+            return Point.dist(p, q), p, q
+    
+        s = (i + j) // 2
+        d, p, q = min(
+            recurse(i, s),
+            recurse(s, j),
+            key = lambda a: a[0] # 1st entry of tuple is distance
+        )
+
+        leftmost = points[s].coords[0] - d
+        for l in reversed(points[i:s]):
+            if l.coords[0] < leftmost:
+                break
+            rightmost = points[s-1].coords[0] + d
+            for r in points[s:j]:
+                if r.coords[0] > rightmost:
+                    break
+                d2 = Point.dist(l, r)
+                if d2 < d:
+                    d = d2
+                    p = l
+                    q = r
+
+        return d, p, q
+    
+
+    return recurse(0, len(points))
+
+
+
+def run(fun, points):
+    '''Run one algorithm, and print its result.  Returns smallest
+    distance found.
+
+    '''
+    d, p, q = fun(points)
+    print('{}: {} {} {}'.format(fun.__name__, d, p, q))
+    return d
+
+def compare(points):
+    '''Runs all algorithms and compares their results.  Returns
+    consensus.
+
+    '''
+    ds = list(map((lambda a: run(a, points)), [
+        bruteForce,
+        closestPair,
+        closestPair2
+    ]))
+    ret = all(x == ds[0] for x in ds[1:])
+    if ret:
+        print('[32mGood[m')
+    else:
+        print('[31mMismatch[m')
+    return ret
     
 
 def main(argv):
@@ -96,49 +181,36 @@ def main(argv):
             try:
                 with open(fn, 'tr') as fh:
                     for line in fh:
-                        points.append(Point(*map(int, line.split('\t'))))
+                        points.append(Point(*map(int, line.split(' '))))
                     print('Loaded {} points from {}.'.format(len(points), fn))
 
             except FileNotFoundError:
-                print('Failed to read {}'.format(fn))
+                print('Failed to read: {}'.format(fn))
                 ret = 1
                 continue
 
-            d1, p1, q1 = bruteForce(points)
-            print('brute force: {} {} {}'.format(d1, p1.coords, q1.coords))
+            except ValueError:
+                print('Invalid format: {}'.format(fn))
+                ret = 1
+                continue
 
-            d2, p2, q2 = closestPair(points)
-            print('closest pair: {} {} {}'.format(d2, p2.coords, q2.coords))
-
-            if d1 == d2:
-                print('[32mGood[m')
-            else:
-                print('[31mMismatch[m')
+            if not compare(points):
                 ret = 1
 
         return ret
 
     else:
-
+        
         fnum = 0
         while True:
-            points = mkPoints(10)        
-                
-            d1, p1, q1 = bruteForce(points)
-            print('brute force: {} {} {}'.format(d1, p1.coords, q1.coords))
+            points = mkPoints(random.randrange(1000) + 2)
 
-            d2, p2, q2 = closestPair(points)
-            print('closest pair: {} {} {}'.format(d2, p2.coords, q2.coords))
-
-            if d1 == d2:
-                print('[32mGood[m')
-            else:
-                print('[31mMismatch[m')
+            if not compare(points):
                 while True:
                     try:
                         with open('failed{:05}.txt'.format(fnum), 'tx') as fh:
                             for p in points:
-                                fh.write('\t'.join(map(str, p.coords)) + '\n')
+                                fh.write(' '.join(map(str, p.coords)) + '\n')
                     except FileExistsError:
                         fnum += 1
                         continue
