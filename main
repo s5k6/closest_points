@@ -20,13 +20,13 @@ class Point:
         return '[' + ','.join(map(str, self.coords)) + ']'
 
 def mkPoints(n, d=5):
-    
+
     points = list()
-    d = random.randrange(1, 10)
+    d = random.randrange(1, 7)
     for i in range(n):
         cs = map(lambda _: random.randrange(math.floor(10*n/d)), range(d))
         points.append(Point(*cs))
-    print('Generated {} points.'.format(len(points)))
+    print('Generated {} points in {} dimensions.'.format(len(points), d))
 
     return points
 
@@ -55,36 +55,51 @@ def bruteForce(points):
 def closestPair(points):
     '''https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
 
-    Version using lists'''
+    This implementation relies on Python's list sections being
+    generators.
 
+    '''
+
+    # recursive divide and conquer part
     def recurse(ps):
         l = len(ps)
 
+        # there's no pair
         if l < 2:
             return math.inf, None, None
 
+        # there's exactly one pair
         if l == 2:
             p = ps[0]
             q = ps[1]
             return Point.dist(p, q), p, q
 
+        # split list in two, recurse left and right, `(d, p, q)` is
+        # the minimum over both results wrt. `d`.
         s = l // 2
         left = ps[:s]
         right = ps[s:]
         d, p, q = min(
             recurse(left),
             recurse(right),
-            key = lambda a: a[0]
+            key = lambda a: a[0] # 1st entry of tuple is distance
         )
 
+        # Now check whether any point on the left is closer to any
+        # point on the right then `d`.
+
+        # how far to look into the left points (from right end)
         leftmost = right[0].coords[0] - d
         for l in reversed(left):
+            # for each point on left which is close enough...
             if l.coords[0] < leftmost:
                 break
-            rightmost = left[-1].coords[0] + d
+            # ...check out the first few on the right side.
+            rightmost = l.coords[0] + d
             for r in right:
                 if r.coords[0] > rightmost:
                     break
+                # test for new minimum
                 d2 = Point.dist(l, r)
                 if d2 < d:
                     d = d2
@@ -92,7 +107,8 @@ def closestPair(points):
                     q = r
 
         return d, p, q
-    
+
+    # start recursion on points sorted wrt. 1st coordinate
     return recurse(sorted(points, key = lambda p: p.coords[0]))
 
 
@@ -116,7 +132,7 @@ def closestPair2(unsortedPoints):
             p = points[i]
             q = points[i+1]
             return Point.dist(p, q), p, q
-    
+
         s = (i + j) // 2
         d, p, q = min(
             recurse(i, s),
@@ -128,7 +144,7 @@ def closestPair2(unsortedPoints):
         for l in reversed(points[i:s]):
             if l.coords[0] < leftmost:
                 break
-            rightmost = points[s-1].coords[0] + d
+            rightmost = l.coords[0] + d
             for r in points[s:j]:
                 if r.coords[0] > rightmost:
                     break
@@ -139,7 +155,7 @@ def closestPair2(unsortedPoints):
                     q = r
 
         return d, p, q
-    
+
 
     return recurse(0, len(points))
 
@@ -170,9 +186,15 @@ def compare(points):
     else:
         print('[31mMismatch[m')
     return ret
-    
+
 
 def main(argv):
+    '''Repeatedly runs all known algorithms on sets of random points.
+
+    If the results differ, the point set is written to disk for
+    inspection.
+
+    '''
 
     if len(argv) > 0:
         ret = 0
@@ -200,7 +222,7 @@ def main(argv):
         return ret
 
     else:
-        
+
         fnum = 0
         while True:
             points = mkPoints(random.randrange(1000) + 2)
@@ -218,7 +240,7 @@ def main(argv):
 
     return 0
 
-    
+
 if __name__ == '__main__':
     try:
         exit(main(sys.argv[1:]))

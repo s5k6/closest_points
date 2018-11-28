@@ -1,0 +1,6 @@
+I once was confronted with the problem to find the closest pair of
+objects on a map.  Turned out that Wikipedia has a nice algorithm [1]
+for that.  Now I've found the time to build it, just for fun.
+
+____________________
+[1] https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
