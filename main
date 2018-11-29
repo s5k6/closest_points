@@ -3,6 +3,7 @@
 import random
 import math
 import sys
+import time
 
 
 class Point:
@@ -161,13 +162,88 @@ def closestPair2(unsortedPoints):
 
 
 
+def closestPair3(points):
+    '''Variant of `closestPair` improving the selection of nodes on the
+    right to be considered.
+
+    '''
+
+    # recursive divide and conquer part
+    def recurse(ps):
+        l = len(ps)
+
+        # there's no pair
+        if l < 2:
+            return math.inf, None, None
+
+        # there's exactly one pair
+        if l == 2:
+            p = ps[0]
+            q = ps[1]
+            return Point.dist(p, q), p, q
+
+        # split list in two, recurse left and right, `(d, p, q)` is
+        # the minimum over both results wrt. `d`.
+        s = l // 2
+        left = ps[:s]
+        right = ps[s:]
+        d, p, q = min(
+            recurse(left),
+            recurse(right),
+            key = lambda a: a[0] # 1st entry of tuple is distance
+        )
+
+        # Now check whether any point on the left is closer to any
+        # point on the right then `d`.
+
+        # how far to look into the left points (from right end)
+        leftmost = right[0].coords[0] - d
+        
+        for l in reversed(left):
+            # for each point on left which is close enough...
+            if l.coords[0] < leftmost:
+                break
+            # ...check out the first few on the right side.
+            for r in right:
+
+                #if r.coords[0] > rightmost:
+                #    break
+             
+                #if abs(r.coords[0] - l.coords[0]) > d:
+                #    break
+
+                for rc, lc in zip(r.coords, l.coords):
+                    if abs(rc - lc) > d:
+                        break
+                else: # no `break`, so need to test
+                    d2 = Point.dist(l, r)
+                    if d2 < d:
+                        d = d2
+                        p = l
+                        q = r
+
+            
+        return d, p, q
+
+    # start recursion on points sorted wrt. 1st coordinate
+    return recurse(sorted(points, key = lambda p: p.coords[0]))
+
+
+
 def run(fun, points):
     '''Run one algorithm, and print its result.  Returns smallest
     distance found.
 
     '''
+    start = time.time()
     d, p, q = fun(points)
-    print('{}: {} {} {}'.format(fun.__name__, d, p, q))
+    stop = time.time()
+    dur = (stop - start) * 1000
+    print('{dur: 7.2f}ms {name:s}: {dist:f}'.format(
+        name = fun.__name__,
+        dur = dur,
+        dist = d
+    ))
     return d
 
 def compare(points):
@@ -178,7 +254,8 @@ def compare(points):
     ds = list(map((lambda a: run(a, points)), [
         bruteForce,
         closestPair,
-        closestPair2
+        closestPair2,
+        closestPair3
     ]))
     ret = all(x == ds[0] for x in ds[1:])
     if ret:
@@ -186,6 +263,7 @@ def compare(points):
     else:
         print('[31mMismatch[m')
     return ret
+
 
 
 def main(argv):
