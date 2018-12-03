@@ -20,20 +20,53 @@ class Point:
     def __str__(self):
         return '[' + ','.join(map(str, self.coords)) + ']'
 
-def mkPoints(n, d=5):
+    def __eq__(self, other):
+        return all([ x == y for (x,y) in zip(self.coords, other.coords)])
 
-    points = list()
-    d = random.randrange(1, 7)
+    def __hash__(self):
+        return hash(self.coords)
+
+
+
+class TooManyTests(Exception):
+    '''Thrown if there are too many comparisons made.  See `Note_1` for a
+    definition of "Too many".
+
+    '''
+
+    def __init__(self, n):
+        self.n = n
+
+    def __str__(self):
+        return 'Too many tests: {}'.format(self.n)
+
+
+
+class NoConsensus(Exception):
+    '''Thrown if different implementations return different results.'''
+
+    def __str__(self):
+        return 'Different results'
+
+
+
+def mkPoints(n=10000, r=100, d=5):
+
+    points = set()
     for i in range(n):
-        cs = map(lambda _: random.randrange(math.floor(10*n/d)), range(d))
-        points.append(Point(*cs))
+        cs = [
+            random.randrange(r) for _ in range(d)
+            #random.random() * r for _ in range(d)
+        ]
+        points.add(Point(*cs))
     print('Generated {} points in {} dimensions.'.format(len(points), d))
 
-    return points
+    return list(points)
 
 
 
 def bruteForce(points):
+
     '''Brute force implementation.  O(**2)'''
 
     p = points[0]
@@ -57,7 +90,8 @@ def closestPair(points):
     '''https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
 
     This implementation relies on Python's list sections being
-    generators.
+    generators.  It does *not* guarantee a constant number of distance
+    calculations between left and right set.
 
     '''
 
@@ -118,7 +152,8 @@ def closestPair2(unsortedPoints):
     '''https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
 
     Version using list indexing.  This would be more like a C
-    implementation.
+    implementation.  It does *not* guarantee a constant number of
+    distance calculations between left and right set.
 
     '''
 
@@ -166,6 +201,14 @@ def closestPair3(points):
     '''Variant of `closestPair` improving the selection of nodes on the
     right to be considered.
 
+    This *does* guarantee a constant number of distance calculations
+    between left and right set.
+
+    I'm still not happy: The algorithm still scans the entire right
+    set, sorting out points too far away based on comparing individual
+    coordinates.  In the worst case, it's the last coordinate in a
+    high-dimensional case.
+
     '''
 
     # recursive divide and conquer part
@@ -198,31 +241,31 @@ def closestPair3(points):
 
         # how far to look into the left points (from right end)
         leftmost = right[0].coords[0] - d
-        
+
         for l in reversed(left):
             # for each point on left which is close enough...
             if l.coords[0] < leftmost:
                 break
             # ...check out the first few on the right side.
+            debugTestcount = 0
             for r in right:
-
-                #if r.coords[0] > rightmost:
-                #    break
-             
-                #if abs(r.coords[0] - l.coords[0]) > d:
-                #    break
 
                 for rc, lc in zip(r.coords, l.coords):
                     if abs(rc - lc) > d:
                         break
                 else: # no `break`, so need to test
                     d2 = Point.dist(l, r)
+                    debugTestcount += 1
                     if d2 < d:
                         d = d2
                         p = l
                         q = r
 
-            
+            # See note `Note_1` below
+            dim = len(l.coords)
+            if 2 * 3 ** (dim - 1) < debugTestcount:
+                raise TooManyTests(debugTestcount)
+
         return d, p, q
 
     # start recursion on points sorted wrt. 1st coordinate
@@ -239,30 +282,24 @@ def run(fun, points):
     d, p, q = fun(points)
     stop = time.time()
     dur = (stop - start) * 1000
-    print('{dur: 7.2f}ms {name:s}: {dist:f}'.format(
+    print('{dur: 10.2f}ms {name:s}: {dist:f}'.format(
         name = fun.__name__,
         dur = dur,
         dist = d
     ))
     return d
 
-def compare(points):
-    '''Runs all algorithms and compares their results.  Returns
-    consensus.
 
-    '''
+def compare(points):
+    '''Runs all algorithms and compares their results.'''
     ds = list(map((lambda a: run(a, points)), [
-        bruteForce,
+        #bruteForce,
         closestPair,
         closestPair2,
-        closestPair3
+        closestPair3,
     ]))
-    ret = all(x == ds[0] for x in ds[1:])
-    if ret:
-        print('[32mGood[m')
-    else:
-        print('[31mMismatch[m')
-    return ret
+    if any(x != ds[0] for x in ds[1:]):
+        raise NoConsensus()
 
 
 
@@ -277,11 +314,12 @@ def main(argv):
     if len(argv) > 0:
         ret = 0
         for fn in argv:
-            points = []
+            points = set()
             try:
                 with open(fn, 'tr') as fh:
                     for line in fh:
-                        points.append(Point(*map(int, line.split(' '))))
+                        #points.add(Point(*map(float, line.split())))
+                        points.add(Point(*map(int, line.split())))
                     print('Loaded {} points from {}.'.format(len(points), fn))
 
             except FileNotFoundError:
@@ -294,18 +332,31 @@ def main(argv):
                 ret = 1
                 continue
 
-            if not compare(points):
-                ret = 1
+            points = list(points)
 
-        return ret
+            try:
+                compare(points)
+                print('\x1b[1;32mGood\x1b[m')
+            except (TooManyTests, NoConsensus) as e:
+                print('\x1b[1;31m{}\x1b[m'.format(e))
+                ret = 1
+        exit(ret)
 
     else:
 
         fnum = 0
         while True:
-            points = mkPoints(random.randrange(1000) + 2)
+            points = mkPoints(
+                n = random.randrange(10000) + 2,
+                r = 100,
+                d = random.randrange(6) + 2
+            )
 
-            if not compare(points):
+            try:
+                compare(points)
+                print('\x1b[1;32mGood\x1b[m')
+            except (TooManyTests, NoConsensus) as e:
+                print('\x1b[1;31m{}\x1b[m'.format(e))
                 while True:
                     try:
                         with open('failed{:05}.txt'.format(fnum), 'tx') as fh:
@@ -325,3 +376,14 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print('KeyboardInterrupt')
         exit(1)
+
+
+
+# Notes
+
+# Note_1: I use 2 * 3 ** (dimension - 1), which is correct for
+# integer coordinates, but just an approximation for floats.
+# Otherwise one could dive into packing of hyperspheres [1].
+
+# ____________________
+# [1] https://en.wikipedia.org/wiki/Sphere_packing#Hypersphere_packing
